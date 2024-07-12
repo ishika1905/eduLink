@@ -2,5 +2,5 @@ __pycache__/
 
 venv/
 
-dockercompose.yml
+docker-compose.yml
 Dockerfile

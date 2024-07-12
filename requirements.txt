@@ -1,0 +1,12 @@
+Flask
+Flask-SQLAlchemy
+Flask-Bcrypt
+Flask-JWT-Extended
+Flask-WTF
+Flask-Login
+PyMySQL
+flask_restful
+werkzeug
+flask_mail
+flask_migrate
+email_validator

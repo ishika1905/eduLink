@@ -4,6 +4,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:Ishu2005@localhost/db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     WTF_CSRF_ENABLED = False  # Disable CSRF for now; enable it when needed
+    MONGO_URI = 'mongodb://localhost:27017/flask_logs'
     JWT_SECRET_KEY = 'jwtverysecretstring'
     JWT_TOKEN_LOCATION = ['headers']
     JWT_HEADER_TYPE = 'Bearer'

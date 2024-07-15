@@ -10,3 +10,5 @@ werkzeug
 flask_mail
 flask_migrate
 email_validator
+pymongo==4.1.1
+loguru==0.5.3

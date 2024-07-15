@@ -1,6 +1,6 @@
 
 from flask import jsonify
-from app import app,db
+from . import app,db
 from app.auth import register, login, logout,google_auth,set_password,get_access_token
 from app.tabs import get_courses, search_courses,mark_favorite, get_favorite_courses, get_lectures,remove_favorite
 from app.auth import confirm_email

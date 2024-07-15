@@ -1,6 +1,10 @@
-from app import db
+from . import db
 from flask_login import UserMixin
+from flask_bcrypt import Bcrypt
 bcrypt = Bcrypt()
+
+from app import app
+from . import db  # Assuming your db instance is imported from your application package
 
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
@@ -22,7 +26,7 @@ class User(db.Model, UserMixin):
     
     def set_password(self, password):
         self.password = bcrypt.generate_password_hash(password).decode('utf-8')
-        
+    
 class Course(db.Model):
     __tablename__ = 'course'
     course_id = db.Column(db.String(50), primary_key=True)

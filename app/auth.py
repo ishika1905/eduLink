@@ -1,15 +1,16 @@
-from flask import jsonify, request, render_template,session
-from app import app,db, bcrypt, mail, token_in_database_required
+import flask
+from flask import jsonify, request, render_template, url_for
+from app import app, db, bcrypt, mail
 from app.models import User
 from app.forms import RegisterForm, LoginForm
 from flask_jwt_extended import create_access_token, get_jwt_identity, unset_jwt_cookies
 from itsdangerous import URLSafeTimedSerializer
 from flask_mail import Message
-from flask import url_for
 from datetime import datetime, timedelta
 from authlib.integrations.flask_client import OAuth
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+from app.decorater import token_in_database_required
 
 # Adjust this tolerance window as needed (in seconds)
 TOKEN_TOLERANCE_SECONDS = 30
@@ -69,7 +70,6 @@ def get_access_token():
     if not user:
         return jsonify({'message': 'User not found'}), 404
 
-    # Example assuming `access_token` is a field in the User model
     if not user.access_token:
         return jsonify({'message': 'Access token not found for the user'}), 404
 
@@ -101,6 +101,23 @@ def set_password():
 
     except Exception as e:
         return jsonify({'message': 'An error occurred', 'error': str(e)}), 500
+
+def generate_confirmation_token(email):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    return serializer.dumps(email, salt=app.config['SECURITY_PASSWORD_SALT'])
+
+def confirm_token(token, expiration=3600):
+    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+    try:
+        email = serializer.loads(
+            token,
+            salt=app.config['SECURITY_PASSWORD_SALT'],
+            max_age=expiration
+        )
+    except Exception as e:
+        return None
+    return email
+
 def confirm_email(token):
     email = confirm_token(token)
     if not email:
@@ -137,16 +154,17 @@ def register():
         return jsonify({'message': 'Passwords do not match'}), 400
 
     if form.validate():
-        if User.query.filter_by(email=email).first():
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
             return jsonify({'message': 'User already exists'}), 400
 
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
         new_user = User(name=name, email=email, password=hashed_password, confirmed=False)
-        db.session.add(new_user)
-
+        
         try:
+            db.session.add(new_user)
             db.session.commit()
-            send_verification_email(email)
+            confirm_email(new_user.email)  # Assuming this sends a confirmation email
             return jsonify({'message': 'User registered successfully'}), 200
         except Exception as e:
             db.session.rollback()
@@ -155,40 +173,58 @@ def register():
     else:
         errors = form.errors
         return jsonify({'message': 'Validation failed', 'errors': errors}), 400
-
+    
 def login():
-    data = request.get_json()
-    if not data:
-        return jsonify({'message': 'No data received or invalid JSON format'}), 400
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'message': 'No data received or invalid JSON format'}), 400
 
-    form = LoginForm(data=data)
-    if form.validate():
-        email = form.email.data
-        password = form.password.data
+        email = data.get('email')
+        password = data.get('password')
 
         user = User.query.filter_by(email=email).first()
-        if user and bcrypt.check_password_hash(user.password, password):
-            access_token = create_access_token(identity=email)
-            user.access_token = access_token  # Update user's access token in the database
-            try:
-                db.session.commit()
-                return jsonify({'message': 'Login successful', 'access_token': access_token}), 200
-            except Exception as e:
-                db.session.rollback()
-                app.logger.error(f"Error committing access token for user {user.email}: {e}")
-                return jsonify({'message': 'Internal server error'}), 500
-        else:
+        if not user:
             return jsonify({'message': 'Invalid credentials'}), 401
-    else:
-        errors = form.errors
-        return jsonify({'message': 'Validation failed', 'errors': errors}), 400
+
+        # Check if the stored password is hashed or plain text
+        try:
+            # Attempt to hash the password and compare
+            if bcrypt.check_password_hash(user.password, password):
+                pass
+            else:
+                return jsonify({'message': 'Invalid credentials'}), 401
+        except ValueError:
+            # If ValueError occurs, the stored password is in plain text
+            if user.password == password:
+                # Hash the password and update the database
+                hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+                user.password = hashed_password
+            else:
+                return jsonify({'message': 'Invalid credentials'}), 401
+
+        # If password matches, generate access token
+        access_token = create_access_token(identity=email)
+        user.access_token = access_token  # Update user's access token in the database
+
+        try:
+            db.session.commit()
+            app.logger.info(f"Password hashed and access token set for user {user.email}")
+            return jsonify({'message': 'Login successful', 'access_token': access_token}), 200
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error committing changes for user {user.email}: {e}")
+            return jsonify({'message': 'Internal server error'}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error during login: {e}")
+        return jsonify({'message': 'Internal server error'}), 500
 
 # Error handling
 @app.errorhandler(Exception)
 def handle_error(e):
     app.logger.error(f"An error occurred: {str(e)}")
     return jsonify({'message': 'Internal server error'}), 500
-
 
 @token_in_database_required
 def logout():

@@ -1,6 +1,7 @@
 from flask import jsonify,request
 from app.models import User  # Adjust this import based on your actual models structure
-from app import app, db, token_in_database_required
+from app import app, db
+from app.decorater import  token_in_database_required
 from flask_jwt_extended import get_jwt_identity
 @app.route('/profile', methods=['GET', 'PUT'])
 @token_in_database_required

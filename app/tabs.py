@@ -1,8 +1,8 @@
 from flask import jsonify,request
-from app import app, db, token_in_database_required
+from app import app, db
 from app.models import Course, Lecture,FavoriteCourse
 from flask_login import current_user
-
+from app.decorater import token_in_database_required
 @token_in_database_required
 def get_courses():
     try:

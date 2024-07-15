@@ -1,8 +1,11 @@
-from flask import jsonify,request
+from flask import jsonify, request
 from app import app, db
-from app.models import Course, Lecture,FavoriteCourse
+from app.models import Course, Lecture, FavoriteCourse
 from flask_login import current_user
 from app.decorater import token_in_database_required
+from loguru import logger
+
+# Course functions
 @token_in_database_required
 def get_courses():
     try:
@@ -36,13 +39,14 @@ def get_courses():
             'has_prev': courses.has_prev
         }
 
+        logger.info("Courses fetched successfully")
         return jsonify({'courses': course_list, 'pagination': pagination_data}), 200
 
     except Exception as e:
-        app.logger.error(f"Error fetching courses: {e}")
+        logger.error(f"Error fetching courses: {e}")
         return jsonify({'message': 'Internal server error'}), 500
-    
-    
+
+
 @token_in_database_required
 def search_courses():
     try:
@@ -72,10 +76,11 @@ def search_courses():
             }
             course_list.append(course_data)
 
+        logger.info("Courses searched successfully")
         return jsonify(course_list), 200
 
     except Exception as e:
-        app.logger.error(f"Error searching courses: {e}")
+        logger.error(f"Error searching courses: {e}")
         return jsonify({'message': 'Internal server error'}), 500    
 
 
@@ -100,8 +105,8 @@ def mark_favorite():
         db.session.add(favorite_course)
         db.session.commit()
 
+    logger.info(f"Course {fav_id} marked as favorite for user {current_user.email}")
     return jsonify({'message': 'Course marked as favorite','favorite':True}), 200
-
 
 
 @token_in_database_required
@@ -121,14 +126,14 @@ def get_favorite_courses():
                 'course_name': fav.course.course_name,
                 'course_details': fav.course.course_details,
                 'duration': fav.course.duration
-                
             } for fav in favorite_courses
         ]
 
+        logger.info("Favorite courses fetched successfully")
         return jsonify(favorite_course_list), 200
 
     except Exception as e:
-        app.logger.error(f"Error fetching favorite courses: {e}")
+        logger.error(f"Error fetching favorite courses: {e}")
         return jsonify({'message': 'Internal server error'}), 500
 
 
@@ -150,9 +155,11 @@ def remove_favorite():
     db.session.delete(favorite_course)
     db.session.commit()
 
+    logger.info(f"Course {fav_id} removed from favorites for user {current_user.email}")
     return jsonify({'message': 'Course removed from favorites', 'favorite': False}), 200
+
+
 # Lecture functions
-@app.route('/lectures', methods=['GET'])
 @token_in_database_required
 def get_lectures():
     try:
@@ -163,9 +170,9 @@ def get_lectures():
             'youtube_url': lecture.youtube_url,
         } for lecture in lectures]
 
+        logger.info("Lectures fetched successfully")
         return jsonify(lecture_list), 200
 
     except Exception as e:
-        app.logger.error(f"Error fetching lectures: {e}")
+        logger.error(f"Error fetching lectures: {e}")
         return jsonify({'message': 'Internal server error'}), 500
-

@@ -1,19 +1,20 @@
 
 from flask import jsonify
 from . import app,db
-from app.auth import register, login, logout,google_auth,set_password,get_access_token,verify_otp
+from app.auth import register, login, logout,google_auth,set_password,get_access_token,verify_otp,resend_otp,reset_password
 from app.tabs import get_courses, search_courses,mark_favorite, get_favorite_courses, get_lectures,remove_favorite
 from app.profile import profile
 
 # Authentication routes
 app.add_url_rule('/register', 'register', register, methods=['POST'])
 app.add_url_rule('/login', 'login', login, methods=['POST'])
+app.add_url_rule('/forget_password','reset_password',reset_password, methods=['POST'])
 app.add_url_rule('/logout', 'logout', logout, methods=['POST'])
 app.add_url_rule('/google_auth', 'google_auth', google_auth, methods=['POST'])
 app.add_url_rule('/set_password', 'set_password', set_password, methods=['POST'])
 app.add_url_rule('/get_access_token', 'get_access_token', get_access_token, methods=['GET'])
 app.add_url_rule('/verify_otp', 'verify_otp', verify_otp, methods=['POST'])
-
+app.add_url_rule('/resend_otp','resend_otp',resend_otp, methods=['POST'])
 # Course and Lecture routes
 app.add_url_rule('/home_page', 'get_courses', get_courses, methods=['GET'])
 app.add_url_rule('/search', 'search_courses', search_courses, methods=['GET'])

@@ -15,9 +15,10 @@ class User(db.Model, UserMixin):
     access_token = db.Column(db.String(1000))
     confirmed = db.Column(db.Boolean, default=False)  # Add confirmed attribute
     confirmed_on = db.Column(db.DateTime)  # Optional: Add confirmed_on timestamp
-    profile_picture = db.Column(db.String(150), nullable=True, default='/Users/angie/StudioProjects/flutter_app/profile_images/pfp.png')
+    profile_picture = db.Column(db.String(1024), nullable=True, default='/Users/angie/StudioProjects/flutter_app/profile_images/pfp.png')
     favorite_courses = db.relationship('FavoriteCourse', back_populates='user')
     otp = db.Column(db.String(5), nullable=False)
+    otp_created_at = db.Column(db.DateTime, nullable=True)
     
     def get_id(self):
         return self.email

@@ -110,10 +110,12 @@ def set_password():
         logger.error(f"Error setting password: {str(e)}")
         return jsonify({'message': 'An error occurred', 'error': str(e)}), 500
 
+import random
+from datetime import datetime
+
 def generate_otp():
     return str(random.randint(10000, 99999))
 
-# Function to send OTP via email
 def send_otp_email(email, otp):
     html_body = render_template_string(
         """
@@ -126,7 +128,7 @@ def send_otp_email(email, otp):
                 <p>Thank you for registering with EduLink. We are excited to have you
                     on board. EduLink is your one-stop student portal to manage all
                     your academic needs. Stay connected, stay informed.
-                    Use the following OTP to complete your Sign Up procedures. OTP is valid for 5 minutes</p>
+                    Use the following OTP to complete your Sign Up procedures. OTP is valid for 2 minutes</p>
                 <h2 style="background: #00466a;margin: 0 auto;width: max-content;padding: 0 10px;color: #fff;border-radius: 4px;">{{ otp }}</h2>
                 <p style="font-size:0.9em;">Regards,<br />Edulink</p>
                 <hr style="border:none;border-top:1px solid #eee" />
@@ -166,12 +168,13 @@ def register():
                 return jsonify({'message': 'User already exists'}), 400
 
             otp = generate_otp()
-
             send_otp_email(email, otp)
 
             # Store the user in the database with confirmed=False
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-            new_user = User(name=name, email=email, password=hashed_password, confirmed=False, otp=otp)
+            new_user = User(
+                name=name, email=email, password=hashed_password, confirmed=False, otp=otp, otp_created_at=datetime.utcnow()
+            )
 
             db.session.add(new_user)
             db.session.commit()
@@ -187,16 +190,14 @@ def register():
         db.session.rollback()
         logger.error(f"Error registering user: {e}")
         return jsonify({'message': 'Error registering user'}), 500
-
-from datetime import datetime, timedelta
-
+    
 @app.route('/verify_otp', methods=['POST'])
 def verify_otp():
     try:
         data = request.get_json()
         if not data or 'otp' not in data:
             return jsonify({'message': 'OTP is required in the request'}), 400
-        
+
         otp = data['otp']
 
         # Check if OTP length is less than 5 digits
@@ -205,7 +206,9 @@ def verify_otp():
 
         # Retrieve user from database
         user = User.query.filter_by(otp=otp).first()
+        logger.debug(f"User retrieved from database: {user}")
         if not user:
+            logger.debug("User not found or Incorrect OTP")
             return jsonify({'message': 'User not found or Incorrect OTP'}), 404
 
         # Check if OTP matches
@@ -213,17 +216,17 @@ def verify_otp():
             return jsonify({'message': 'Incorrect OTP'}), 400
 
         # Check OTP expiration (for example, 5 minutes)
-        if (datetime.utcnow() - user.created_at).total_seconds() > 300:
-            user.otp = None  # Clear OTP
-            db.session.commit()
+        if (datetime.utcnow() - user.otp_created_at).total_seconds() > 120:
+            logger.debug("OTP has expired")
             return jsonify({'message': 'Time up. Kindly resend the OTP.'}), 400
 
         # Mark user as confirmed
         user.confirmed = True
         user.confirmed_on = datetime.utcnow()
         user.otp = None  # Clear OTP
+        user.otp_created_at = None  # Clear OTP created time
         db.session.commit()
-
+        logger.debug("Email confirmed successfully")
         return jsonify({'message': 'Email confirmed successfully'}), 200
 
     except Exception as e:
@@ -231,6 +234,46 @@ def verify_otp():
         logger.error(f"Error verifying OTP: {e}")
         return jsonify({'message': 'Error verifying OTP', 'error': str(e)}), 500
 
+@app.route('/resend_otp', methods=['POST'])
+def resend_otp():
+    try:
+        data = request.get_json()
+        logger.debug(f"Received data for resending OTP: {data}")
+
+        if not data or 'otp' not in data:
+            logger.debug("OTP not found in request data")
+            return jsonify({'message': 'OTP is required in the request'}), 400
+        
+        otp = data['otp'].strip()
+        logger.debug(f"Received OTP: {otp}")
+
+        # Retrieve user from the database using the expired OTP
+        user = User.query.filter_by(otp=otp).first()
+        logger.debug(f"User retrieved from database: {user}")
+
+        if not user:
+            logger.debug("User not found with the provided OTP")
+            return jsonify({'message': 'User not found with the provided OTP'}), 404
+
+        # Generate a new OTP
+        new_otp = generate_otp()
+        logger.debug(f"Generated new OTP: {new_otp}")
+
+        # Update user with the new OTP and timestamp
+        user.otp = new_otp
+        user.otp_created_at = datetime.utcnow()
+        db.session.commit()
+
+        # Send the new OTP via email
+        send_otp_email(user.email, new_otp)
+        logger.debug("New OTP sent successfully")
+
+        return jsonify({'message': 'A new OTP has been sent to your email.'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error resending OTP: {e}")
+        return jsonify({'message': 'Error resending OTP', 'error': str(e)}), 500
 
 def login():
     try:
@@ -272,6 +315,39 @@ def login():
 
     except Exception as e:
         logger.error(f"Error during login: {e}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+
+def reset_password():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'message': 'No data received or invalid JSON format'}), 400
+
+        email = data.get('email')
+        new_password = data.get('password')
+        confirm_password = data.get('confirm_password')
+
+        if not all([email, new_password, confirm_password]):
+            return jsonify({'message': 'Missing fields'}), 400
+
+        if new_password != confirm_password:
+            return jsonify({'message': 'Passwords do not match'}), 400
+
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+
+        # Hash the new password and update the database
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        user.password = hashed_password  # Replace the existing password with the new hashed password
+
+        db.session.commit()  # Save the changes to the database
+        logger.info(f"Password reset successful for user {user.email}")
+        return jsonify({'message': 'Password reset successful'}), 200
+
+    except Exception as e:
+        logger.error(f"Error during password reset: {e}")
         return jsonify({'message': 'Internal server error'}), 500
 
 @token_in_database_required

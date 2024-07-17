@@ -2,7 +2,7 @@ from . import db
 from flask_login import UserMixin
 from flask_bcrypt import Bcrypt
 bcrypt = Bcrypt()
-
+from datetime import datetime
 from app import app
 from . import db  # Assuming your db instance is imported from your application package
 
@@ -17,7 +17,8 @@ class User(db.Model, UserMixin):
     confirmed_on = db.Column(db.DateTime)  # Optional: Add confirmed_on timestamp
     profile_picture = db.Column(db.String(150), nullable=True, default='/Users/angie/StudioProjects/flutter_app/profile_images/pfp.png')
     favorite_courses = db.relationship('FavoriteCourse', back_populates='user')
-
+    otp = db.Column(db.String(5), nullable=False)
+    
     def get_id(self):
         return self.email
 
